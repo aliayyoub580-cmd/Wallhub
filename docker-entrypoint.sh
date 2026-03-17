@@ -3,6 +3,13 @@
 
 cd /var/www/html
 
+# --- Apache MPM fix (Railway): ensure ONLY one MPM is loaded ---
+rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
+cat > /etc/apache2/mods-enabled/000-mpm.load <<'EOF'
+LoadModule mpm_prefork_module /usr/lib/apache2/modules/mod_mpm_prefork.so
+EOF
+[ -f /etc/apache2/mods-available/mpm_prefork.conf ] && cp /etc/apache2/mods-available/mpm_prefork.conf /etc/apache2/mods-enabled/000-mpm.conf
+
 # --- Permissions ---
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R ug+rwx storage bootstrap/cache
