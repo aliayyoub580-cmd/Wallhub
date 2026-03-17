@@ -4,9 +4,8 @@ WORKDIR /app
 # composer:2 is Alpine-based — use apk, not apt-get
 RUN apk add --no-cache git unzip
 
-COPY composer.json composer.lock ./
-# --no-scripts skips post-autoload-dump (artisan is not present in this stage)
-RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader --no-scripts
+COPY . .
+RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
 FROM node:20-alpine AS frontend_build
 
