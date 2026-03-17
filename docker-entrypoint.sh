@@ -1,24 +1,40 @@
 #!/bin/sh
-set -e
+# NOTE: no 'set -e' — we handle errors manually so one failure doesn't kill the container
 
-# Generate app key if not set
+cd /var/www/html
+
+# --- Permissions ---
+chown -R www-data:www-data storage bootstrap/cache
+chmod -R ug+rwx storage bootstrap/cache
+
+# --- App key ---
 if [ -z "$APP_KEY" ]; then
+    echo "[entrypoint] Generating APP_KEY..."
     php artisan key:generate --force
 fi
 
-# Discover and register service providers (skipped during docker build)
-php artisan package:discover --ansi
+# --- SQLite: create the database file if using sqlite ---
+DB=${DB_CONNECTION:-sqlite}
+if [ "$DB" = "sqlite" ]; then
+    DB_FILE=${DB_DATABASE:-/var/www/html/database/database.sqlite}
+    if [ ! -f "$DB_FILE" ]; then
+        echo "[entrypoint] Creating SQLite database: $DB_FILE"
+        mkdir -p "$(dirname $DB_FILE)"
+        touch "$DB_FILE"
+        chown www-data:www-data "$DB_FILE"
+    fi
+fi
 
-# Run migrations
-php artisan migrate --force
+# --- Package discovery (skipped during docker build) ---
+php artisan package:discover --ansi || echo "[entrypoint] package:discover warning (non-fatal)"
 
-# Cache config, routes and views for production performance
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+# --- Migrations (non-fatal: app can still serve if migrations fail) ---
+php artisan migrate --force && echo "[entrypoint] Migrations complete" || echo "[entrypoint] Migration warning (non-fatal — check DB env vars)"
 
-# Fix storage permissions (in case they were reset)
-chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-chmod -R ug+rwx /var/www/html/storage /var/www/html/bootstrap/cache
+# --- Production caches ---
+php artisan config:cache  || true
+php artisan route:cache   || true
+php artisan view:cache    || true
 
+echo "[entrypoint] Starting Apache..."
 exec "$@"
